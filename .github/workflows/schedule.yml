@@ -1,0 +1,83 @@
+name: Execute On Schedule
+
+on:
+  schedule:
+    # Executes at 30 minutes past the hour, every hour
+    # For example, 0:30, 1:30, 2:30 UTC etc.
+    - cron: '0 * * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    steps:
+      - name: Checkout Repository Contents
+        # Checks out your repository under $GITHUB_WORKSPACE so the workflow can access it
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        # Sets up a Python environment on the runner
+        uses: actions/setup-python@v5 # Use v5 for latest features and compatibility
+        with:
+          python-version: '3.x' # Use the latest Python 3 version available
+
+      - name: Install Python Packages Requirements
+        # Installs dependencies listed in requirements.txt using pip
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create data directory if it doesn't exist
+        # Ensures the data directory exists before placing files in it
+        run: mkdir -p data
+
+      - name: Create archive file if it doesn't exist
+        # Ensures the archive file exists before the script tries to append to it
+        run: touch data/archive.txt
+
+      - name: Download GeoLite2 Country Database
+        # Downloads the GeoIP database required for country lookup
+        run: |
+          echo "Downloading GeoLite2 Country database..."
+          # Use curl to download the database from the specified URL
+          curl -L 'https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb' -o data/GeoLite2-Country.mmdb
+          echo "GeoLite2 Country database downloaded and placed in data/."
+        # Optional: Add logic here to skip download if file exists and is recent to save time
+
+      - name: Run proxy poster script
+        # Executes your main Python script
+        # Pass Telegram secrets as environment variables to the script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }} # Your Telegram Bot Token secret
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }} # Your Telegram Channel ID secret
+        run: python src/proxy_poster.py # Execute the script located in the src directory
+
+      - name: Commit Files
+        run: |
+          git config --local user.email "seyyedsoroushmirzaei@protonmail.com"
+          git config --local user.name "Soroush Mirzaei"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -a -m "Updated $(TZ='Asia/Tehran' date '+%Y-%m-%d %H:%M %Z')" --allow-empty)
+
+      - name: Push Changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.PRXY_PUBLISH_PUSH }}
+          branch: main
+       
+      - name: Clean Up Files
+        run: |
+          git checkout --orphan latest_branch
+          git config --local user.email "seyyedsoroushmirzaei@protonmail.com"
+          git config --local user.name "Soroush Mirzaei"
+          git add -A
+          git commit -am "Updated $(TZ='Asia/Tehran' date '+%Y-%m-%d %H:%M %Z')"
+          git branch -D main
+          git branch -m main
+          git push -f origin main
+
+      - name: Push Changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.PRXY_PUBLISH_PUSH }}
+          branch: main
